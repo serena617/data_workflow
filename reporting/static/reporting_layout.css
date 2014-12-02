@@ -129,6 +129,7 @@
     font-size:10px;
     float:right;
     padding-right:5px;
+    margin-right:50px;
 }
 
 .summary {
@@ -173,7 +174,6 @@
 {
     box-sizing: border-box;
     color: #666666;
-    margin-right:20px;
 }
 
 .summary_plots #runs_per_hour
