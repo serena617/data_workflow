@@ -1,53 +1,72 @@
+
+
 // ********************************************** //
-// ********* code for plotting ****************** //
+// ********* code for line plots **************** //
 // ********************************************** //
 function plot_1d(raw_data, anchor, options) {
     // For testing purposes, raw_data is fed in, 
     // anchor is the dialog box, and options
     // are empty {}.
 
-    options = {};
+    // options = {};
+    //alert(options);
     color = '#0077cc';
     marker_size = 2;
     height = 350;
-    width = 600;
-    log_scale = false;
+    width = 630;
+    log_scale = options.log_scale;
     grid = true;
     x_label = "time elapsed [minutes]";
     y_label = "";
     title = "";
     // interp = (typeof options.interp ==="undefined") ? "none" : options.interp;
+    //alert(options.log_scale);
 
     var data = [];
     for (var i=0; i<raw_data.length; i++) {
         // if (raw_data[i][1]>0 && raw_data[i][2]<raw_data[i][1]) {  data.push(raw_data[i]); };
 	data.push(raw_data[i]);
     }
-    // alert(raw_data);
-    // alert(raw_data.length);
+    
+    var tid = $(".live_plots").parent().attr("id");
+    //alert($("#" + tid).width());
+    //alert($("#" + tid).height());
+    //alert(anchor)
+    //alert(tid);
+    //alert($("#" + tid).width);
+    //alert($("#" + tid).height);
 
-    var margin = {top: 30, right: 20, bottom: 50, left: 40},
+    var margin = {top: 30, right: 15, bottom: 50, left: 65},
     width = width - margin.left - margin.right,
     height = height - margin.top - margin.bottom;
 
     var x = d3.scale.linear().range([0, width]);
     var y = log_scale ? d3.scale.log().range([height, 0]) : d3.scale.linear().range([height, 0]);
+    var y_min = d3.min(data, function(d) { return d[1]; }) // for a better display of a constant function
+    var y_max = d3.max(data, function(d) { return d[1]; })
     x.domain(d3.extent(data, function(d) { return d[0]; }));
-    y.domain(d3.extent(data, function(d) { return d[1]; }));
+    if ( y_min === y_max ){
+	y.domain([y_min-1, y_max+1]);
+	}
+    else{
+	y.domain([y_min, y_max]);
+    }
+    //alert(y_min + ", " + y_max);
 
     var xAxis = d3.svg.axis().scale(x).orient("bottom").ticks(8).tickFormat(d3.format("5.7g"));
     var xAxisMinor = d3.svg.axis().scale(x).orient("bottom").ticks(4).tickSize(3,3).tickSubdivide(4).tickFormat('');
-    var yAxis = d3.svg.axis().scale(y).orient("left").ticks(4).tickFormat(d3.format("5.6g"));    
+    var yAxis = d3.svg.axis().scale(y).orient("left").ticks(4).tickFormat(d3.format("5.9g"));    
     var yAxisMinor = d3.svg.axis().scale(y).orient("left").ticks(4).tickSize(3,3).tickSubdivide(4).tickFormat('');
     
     // Remove old plot
-    d3.select(anchor).select("svg").remove();
+    d3.select("#" + anchor).select("svg").remove();
     
-    var svg = d3.select(anchor).append("svg")
+    var svg = d3.select("#" + anchor).append("svg")
       .attr("class", "default_1d")
       .attr("width", width + margin.left + margin.right)
       .attr("height", height + margin.top + margin.bottom)
       .append("g")
+      .attr("id", anchor + "_g")
       .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
     svg.append("g").attr("class", "x axis").attr("transform", "translate(0," + height + ")").call(xAxis);
     svg.append("g").attr("class", "x axis").attr("transform", "translate(0," + height + ")").call(xAxisMinor);
@@ -131,7 +150,7 @@ function plot_1d(raw_data, anchor, options) {
 	.style("color", "black");
 
     // Circle obj with colored outline
-    var circle_ol = d3.select("g")
+    var circle_ol = d3.select("#" + anchor + "_g")
 		.append("circle")
 		.attr("cx", "0")
 		.attr("cy", "0")
@@ -157,7 +176,7 @@ function plot_1d(raw_data, anchor, options) {
 
     // This is used to get coordinates on mouseover
     var circle_ar = points.append("circle")
-	.attr("class", "focus")
+	.attr("class", anchor + "_focus")
 	.attr("cx", function(d) { return x(d[0]); })
 	.attr("cy", function(d) { return y(d[1]); })
 	.attr("r", marker_size+5)
@@ -165,7 +184,7 @@ function plot_1d(raw_data, anchor, options) {
 	.style("fill-opacity", "0");
 
     // Get data values on hover event
-    svg.selectAll(".focus")
+    svg.selectAll("." + anchor + "_focus")
 	.on("mouseover", function(d){ mouseover(d); })
 	.on("mousemove", function(d){ mousemove(d); })
 	.on("mouseout", function(d){ mouseout(d); });
@@ -184,8 +203,6 @@ function plot_1d(raw_data, anchor, options) {
 	return tooltip.style("visibility", "hidden");
     }
 }
-
-
 
 function get_color(i, n_max) {
     var n_divs = 4.0;
