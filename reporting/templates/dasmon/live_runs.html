@@ -1,0 +1,112 @@
+{% extends "dasmon/live_monitor.html" %}
+{% load dasmon_tags %}
+
+{% block header %}
+<!--[if lte IE 8]><script language="javascript" type="text/javascript" src="/static/thirdparty/flot/excanvas.min.js"></script><![endif]-->
+<script language="javascript" type="text/javascript" src="/static/thirdparty/flot/jquery.flot.js"></script>
+<script language="javascript" type="text/javascript" src="/static/thirdparty/d3.v3/d3.v3.min.js"></script>
+<script language="javascript" type="text/javascript" src="/static/live_update.js"></script>
+<script language="javascript" type="text/javascript" src="/static/bar_chart.js"></script>
+<link rel="stylesheet" media="all" href="/static/bar_chart.css" />
+<link rel="stylesheet" media="all" href="/static/thirdparty/dynatable/jquery.dynatable.css" />
+<script type='text/javascript' src='/static/thirdparty/dynatable/jquery.dynatable.js'></script>
+
+<script>
+    var records = {% autoescape off %}{{ run_list }}{% endautoescape %};
+    var dynatable = null;
+    var last_run_id = '{{ last_run_id }}';
+    var complete_since_run_id = '{{ first_run_id }}';
+    var run_data = {{ run_rate|safe }};
+    var error_data = {{ error_rate|safe }};
+    jQuery.fn.exists = function(){return this.length>0;}
+    $(document).ready( function() {
+      $('#run_table').dynatable({ dataset: { records: records,
+                                             perPageOptions: [25, 50, 100],
+                                             perPageDefault: 25 },
+                                  features: { pushState: false }
+                                });
+      dynatable = $('#run_table').data('dynatable');
+      dynatable.sorts.add('run_id', -1)
+      dynatable.process();
+    });
+    function poll() {
+        $.ajax({ url: "{{ update_url }}?since="+last_run_id+"&complete_since="+complete_since_run_id, success: function(data){
+            if (data.refresh_needed.localeCompare('1')==0) {
+                for (var i=0;i<data.run_list.length;i++) {
+                    if (!$('#run_id_'+data.run_list[i].run_id).exists()) {
+                        records.push({'instrument_id': "<a href='{{ base_instrument_url }}"+data.run_list[i].instrument_id+"/runs/'>"+data.run_list[i].instrument_id+"</a>",
+                            'run': "<a href='{{ base_run_url }}/"+data.run_list[i].run+"/'>"+data.run_list[i].run+"</a>",
+                            'timestamp': data.run_list[i].timestamp,
+                            'run_id': data.run_list[i].run_id,
+                            'reduce_url': data.run_list[i].reduce_url,
+                            'status': "<span id='run_id_"+data.run_list[i].run_id+"'class='red'>incomplete</span>"});
+                    }
+                }
+                last_run_id = data.last_run_id;
+            }
+            for (var i=0; i<data.status_list.length; i++) {
+                for (var j=0; j<records.length; j++) {
+                    if (data.status_list[i].key == 'run_id_'+records[j].run_id)
+                      records[j].status = "<span id='"+data.status_list[i].key+"'>"+data.status_list[i].value+"</span>";
+                  }
+            }
+            dynatable.settings.dataset.originalRecords = records;
+            dynatable.process();
+            update_from_ajax_data(data);
+            $('#info_last_run').replaceWith("<span id='info_last_run'><a href='{{ base_run_url }}"+data.last_run+"/'>"+data.last_run+"</a></span>");
+            $('#info_last_expt').replaceWith("<span id='info_last_expt'><a href='{{ base_ipts_url }}"+data.last_expt+"/'>"+data.last_expt+"</a></span>");
+            $('#info_run_time').replaceWith("<span id='info_run_time'>"+data.last_run_time+"</span>");
+            
+            run_data = data.run_rate;
+            error_data = data.error_rate;
+            plot_combined_rates(run_data, error_data);
+        }, dataType: "json", timeout: 30000, cache: true,
+        statusCode: { 401: function() { new_alert("Your session expired. Please log in again"); show_alert(); }}});
+    };
+</script>
+{% endblock %}
+
+{% block right_side_links %}
+  {% if is_adara %}
+  <span style="float:right">live monitoring: 
+    <a href="{{ live_monitor_url }}">status</a> | <b>runs</b> | <a href="{{ live_pv_url }}">PVs</a>
+  </span>
+  {% else %}
+  <span style="float:right">live monitoring: 
+    <a href="{{ legacy_url }}">status</a> | <b>runs</b>
+  </span>
+  {% endif %}
+{% endblock %}
+
+{% block bodytop %}
+<script id="source" language="javascript" type="text/javascript">
+    setInterval(poll, 5000);
+</script>
+{% endblock %}
+
+{% block content %}
+  List of latest runs:<br><br>
+  <div>
+  <table class="message_table" id="run_table">
+    <thead>
+      <tr>
+        <th data-dynatable-column="run" style="min-width: 50px;">Run</th>
+        <th data-dynatable-column="timestamp" data-dynatable-sorts="run_id">Created on</th>
+        <th data-dynatable-column="status">Status</th>
+        {% if user.is_staff %}
+            <th data-dynatable-column="reduce_url" style="min-width: 50px;">Reduce</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+  </div>
+  <br>
+
+  <div id="dialog_placeholder"></div>
+
+  <script id="source" language="javascript" type="text/javascript">
+    plot_combined_rates(run_data, error_data);
+  </script>
+{% endblock %}

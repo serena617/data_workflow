@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block breadcrumb %}{% endblock %}
+
+{% block content %}
+    <h3>The data you are looking for could not be found.</h3>
+    <p>
+    This may be due to a number of reasons:
+    <ul>
+      <li>
+        You may be looking for a run that pre-dates the workflow manager.<br>
+        All SNS data is cataloged, but runs taken prior to mid-2013 are unlikely to be in this system.
+      </li>
+      <li>The page you are trying to access simply doesn't exist.</li>
+    </ul>
+{% endblock %}

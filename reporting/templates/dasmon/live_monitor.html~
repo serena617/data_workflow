@@ -1,0 +1,292 @@
+{% extends "report/base_instrument.html" %}
+{% load dasmon_tags %}
+
+{% block title %}{{ instrument }} Monitor {% endblock %}
+{% block header %}
+
+<!--[if lte IE 8]><script language="javascript" type="text/javascript" src="/static/thirdparty/flot/excanvas.min.js"></script><![endif]-->
+<script language="javascript" type="text/javascript" src="/static/thirdparty/flot/jquery.flot.js"></script>
+<!-- <script language="javascript" type="text/javascript" src="/static/live_update.js"></script> -->
+<script language="javascript" type="text/javascript" src="/static/thirdparty/jquery.sparkline.min.js"></script>
+<script language="javascript" type="text/javascript" src="/static/thirdparty/d3.v3/d3.v3.min.js"></script>
+<script language="javascript" type="text/javascript" src="/static/live_update.js"></script>
+<script language="javascript" type="text/javascript" src="/static/plotting_line.js"></script>
+<link rel="stylesheet" type="text/css" href="/static/plotting.css" title="no title" charset="utf-8">
+<link rel="stylesheet" type="text/css" href="/static/thirdparty/flaticon/flaticon.css"> 
+
+<script>
+
+    var last_run_id = '{{ last_run.id }}';
+    var run_data = {{ run_rate|safe }};
+    var error_data = {{ error_rate|safe }};
+    var plotted_vars = [];
+    var plotted_data = [];
+    var plot_timeframe = '7200';
+
+    function poll() {
+        query_str = "";
+        for (var i=0;i<plotted_vars.length; i++) {
+            if (plotted_vars[i][1]=="1") query_str += plotted_vars[i][0]+',';
+        };
+        $.ajax({ url: "{{ update_url }}?time="+plot_timeframe+"&vars="+query_str, success: function(data) {
+            update_from_ajax_data(data);
+            $('#info_last_run').replaceWith("<span id='info_last_run'><a href='{{ base_run_url }}"+data.last_run+"/'>"+data.last_run+"</a></span>");
+            $('#info_last_expt').replaceWith("<span id='info_last_expt'><a href='{{ base_ipts_url }}"+data.last_expt+"/'>"+data.last_expt+"</a></span>");
+            $('#info_run_time').replaceWith("<span id='info_run_time'>"+data.last_run_time+"</span>");
+            
+            run_data = data.run_rate;
+            error_data = data.error_rate;
+            plotted_data = data.live_plot_data;
+            plot_combined_rates(run_data, error_data);
+            
+    	    test_options = {};
+
+            // for (var i=0; i<plotted_vars.length; i++) {
+               // for (var j=0; j<plotted_data.length; j++) {
+                   // if (plotted_data[j][0]==plotted_vars[i][0]) {
+                        // plot_monitor(plotted_data[j][1], "#"+plotted_vars[i][0]+"_dialog", test_options);
+                   // }
+               // }
+           // }
+        }, dataType: "json", timeout: 2000, cache: true,
+        statusCode: { 401: function() { new_alert("Your session expired. Please log in again"); show_alert(); }}});
+
+        pv_query_str = "";
+        for (var i=0;i<plotted_vars.length; i++) {
+            if (plotted_vars[i][1]=="2") pv_query_str += plotted_vars[i][0]+',';
+        };
+        if (pv_query_str.length>0) {
+            $.ajax({ url: "{{ pv_url }}?time="+plot_timeframe+"&vars="+pv_query_str, success: function(data) {
+                plotted_data = data.live_plot_data;
+
+                // alert("plotted_vars: " + plotted_vars);
+		var test_data = [[1, 2], [1.5, 3], [2, 4], [3, 3], [5, 4]];
+
+                for (var i=0; i<plotted_vars.length; i++) {
+                    for (var j=0; j<plotted_data.length; j++) {
+                        if (plotted_data[j][0]==plotted_vars[i][0]) {
+                            var plot_id = "#"+plotted_vars[i][0].replace(/:/g, '_')+"_plot";
+                            plot_1d(plotted_data[j][1], plot_id, plotted_vars[i][0]);
+			    // alert(plotted_data[j][1]);
+			    // alert(plot_id);
+			    // alert(plotted_vars[i][0]);
+                        }
+                    }
+                }
+            }, dataType: "json", timeout: 2000, cache: true,
+            statusCode: { 401: function() { new_alert("Your session expired. Please log in again"); show_alert(); }}});
+        }
+        
+        get_alarms();
+    };
+    
+    function max_timeframe(time_period) 
+    {
+        plot_timeframe = time_period;
+        poll();
+    }
+    
+    function pop_monitor_plot(element_id, option)
+    {
+        var clean_name = element_id.replace(/:/g, '_');
+        var dialog_name = clean_name+"_dialog"
+        if (!$("#"+dialog_name).length)
+        {
+            var plot_content = "<div id='"+dialog_name+"' title='"+element_id+"'>";
+            plot_content    += "  <div class='live_plots'>";
+	    plot_content    += "    <div class='options' style='float:right'>";
+	    plot_content    += "      <ul id='menu'>";
+	    plot_content    += "	<li class='dropdown'>";
+	    plot_content    += "	  <a class='dropdown-link' href='#'><span class='ui-icon ui-icon-gear' style='font-size:16px'>";
+	    plot_content    += "    	    </span></a><div class='sub-menu options'><ul>";
+	    plot_content    += "		<li><a href='#'>Local options</a></li>";
+	    plot_content    += "		<li><a href='#'>Global options</a></li></ul></div></li>";
+	    plot_content    += "      </ul>";
+	    plot_content    += "    </div>";
+	    //plot_content    += "      <a role='button' class='flaticon_link' style='font-size:16px' onclick='options_menu()'>";
+	    //plot_content    += "        <span class='flaticon-settings22' style='font-size:16px'></span></a>";
+	    plot_content    += "    </div><br><br>";
+	    //plot_content    += "    </div>";
+            plot_content    += "    <div class='plot_timeframe'>";
+            plot_content    += "      <a style='outline:none;' href='javascript:void(0);' onClick='max_timeframe(\"900\");'>15m</a> | ";
+            plot_content    += "      <a style='outline:none;' href='javascript:void(0);' onClick='max_timeframe(\"7200\");'>2h</a> | ";
+            plot_content    += "      <a style='outline:none;' href='javascript:void(0);' onClick='max_timeframe(\"86400\");'>max</a> ";
+            plot_content    += "    </div><br>";
+            plot_content    += "    <div style='height:380px' id='"+clean_name+"_plot'></div>";
+            plot_content    += "  </div>";
+            plot_content    += "</div>";
+            $('#dialog_placeholder').append(plot_content);
+            $( "#"+dialog_name ).dialog({
+                width: 670,
+                height: 480,
+                resizable: true,
+                closeOnEscape: true,
+                close: function( event, ui )
+                {
+                    $( "#"+dialog_name ).remove();
+                    for (var i = 0; i < plotted_vars.length; i++) {
+                        if (plotted_vars[i][0]==element_id) plotted_vars[i][1]="0";
+                    };
+                }
+            });
+            plotted_vars.push([element_id, option]);
+            poll();
+	    prepare_menu();
+	    //$(".options").append($("#menu"));
+        }
+    }
+    
+    function get_alarms()
+    {
+        $.ajax({ url: "{{ signals_url }}", success: function(data) {
+            $('#signal_table').replaceWith(data);
+        }, dataType: "html", timeout: 30000, cache: true });
+    }
+    
+    function ack_alarm(ack_url, id)
+    {
+        $.ajax({ url: ack_url, cache: false });
+        $(id).remove();
+    }
+
+function prepare_menu(){
+    $(".dropdown").hover(function() {
+	alert("what!!!");
+        $(this).children("div.sub-menu").slideDown(200);
+    }, function() {
+        $(this).children("div.sub-menu").slideUp(200);
+    });
+};
+
+    //function options_menu(){
+	//var menu_items = '<ul id="menu"><li>Local options</li><li>Global options</li></ul>';
+	//$("body").append(menu_items);
+	//$("#menu").ready(function(){
+
+	//});
+	//alert("you clicked!");
+
+//    function prepare_menu(){
+//	$("#menu").menu({
+  //		position: { my: "left top", at: "left bottom" }
+	//});
+//	$(".ui-menu-icon").remove();
+//	$("#menu #sub_menu").css("z-index", "8030");
+//	$("li ui-menu-item").css("padding", "0px");
+  //  };
+
+  function options_menu(){
+  //alert("como estas");
+  //$(".flaticon_link").load(function(){
+    //$(".options").load(function(){
+	//$(".flaticon-settings22").click(function() {
+		//$("#menu").attr("position", "absolute");
+		//$("#menu").position({
+		//    of: $(".banner_title"),
+		//    my: "left top",
+		//    at: "left top"
+		//});
+		//alert("what");
+		//alert($(this));
+		//$("#quotes-bar-menu").toggle("blind");
+		$("#menu").toggle("blind");
+  		//event.stopPropagation();
+  	//});
+    //});
+    //}
+    }
+
+$(function() {
+    $(".dropdown").hover(function() {
+        $(this).children("div.sub-menu").slideDown(200);
+    }, function() {
+        $(this).children("div.sub-menu").slideUp(200);
+    });
+});
+
+</script>
+{% endblock %}
+
+{% block banner %}{{ instrument }} Monitor {% endblock %}
+
+{% block right_side_links %}
+    <span style="float:right">live monitoring:
+    <b>status</b> | <a href="{{ live_runs_url }}">runs</a> | <a href="{{ live_pv_url }}">PVs</a>
+    </span>
+{% endblock %}
+
+{% block bodytop %}
+<script id="source" language="javascript" type="text/javascript">
+    get_alarms();
+    setInterval(poll, 5000);
+</script>
+{% endblock %}
+
+{% block content %}
+  <table class="message_table" id="error_table">
+    <thead>
+      <tr>
+        <th> Key </th> <th> Value </th> <th> Last Updated </th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in key_value_pairs %}
+      <tr>
+        {% if item.value|is_number %}<td><a href='javascript:void(0);' onClick="pop_monitor_plot('{{ item.key }}', '1');"> {{ item.key }} </a></td>{% else %}<td>{{ item.key }}</td>{% endif %}
+        <td><span id="{{ item.key }}">{{ item.value }}</span></td>
+        <td><span id="{{ item.key }}_timestamp">{{ item.timestamp }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <br>
+
+
+  <div id="dialog_placeholder"></div>
+<!-- ************************************* test **************************************-->
+<!-- <ul id="quotes-bar-menu" style="display:none">
+    <li class="dropdown">
+        <a class="dropdown-link" href="#">Investing Tools</a>
+        <div class="sub-menu investing">
+            <ul>
+                <li>
+                    <h2>Find and Monitor</h2>
+                </li>
+                <li><a href="#">» Guru Screener/Analysis</a></li>
+                <li><a href="#">» Heatmaps</a></li>
+                <li><a href="#">» Stock Screener</a></li>
+                <li><a href="#">» Stock Widget</a></li>
+            </ul>
+            <ul>
+                <li>
+                    <h2>Tools for AAPL</h2>
+                </li>
+                <li><a href="#">» Analyst Info</a></li>
+                <li><a href="#">» Insider Holdings Summary</a></li>
+                <li><a href="#">» Stock Consultant</a></li>
+                <li><a href="#">» Stock Report</a></li>
+                <li><a href="#">» Stock Comparison</a></li>
+            </ul>
+        </div>                
+    </li>
+    <li class="dropdown">
+        <a class="dropdown-link" href="#" class="tracking">Tracking Tools</a>
+        <div class="sub-menu single">
+            <ul>
+                <li>
+                    <h2>Select a tool to begin tracking your stock</h2>
+                </li>
+                <li><a href="#">» Portfolio Tracking</a></li>
+                <li><a href="#">» Ticker</a></li>
+                <li><a href="#">» Alerts</a></li>
+            </ul>
+        </div>                
+    </li>
+</ul> -->
+<!-- ************************************* test **************************************-->
+
+
+  <script id="source" language="javascript" type="text/javascript">
+    plot_combined_rates(run_data, error_data);
+  </script>
+{% endblock%}

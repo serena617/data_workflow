@@ -1,0 +1,92 @@
+{% extends "report/base_instrument.html" %}
+
+{% block title %}{{ instrument }} Run {{ run_object.run_number }}{% endblock %}
+{% block banner %}{{ instrument }} Run {{ run_object.run_number }}{% endblock %}
+
+{% block header %}
+
+<div id="dialog-confirm" title="Submit for post-processing" style="display:none">
+   <p><span class="ui-icon ui-icon-alert" style="float: left"></span>
+   Confirm submission?</p>
+</div>
+<script>
+    function confirm(action) {
+        $( "#dialog-confirm" ).dialog({
+            resizable: false,
+            modal: true,
+            buttons: {
+                "Submit": function() {
+                    window.location.href = action;
+                    },
+                    Cancel: function() {
+                        $( this ).dialog( "close" );
+                        }
+                    }
+        });
+    };
+</script>   
+{% endblock %}
+
+{% block summary %}
+  <span style='float:right'>{% if prev_url %}<a href='{{ prev_url|safe }}'>previous</a>{% else %}previous{% endif %} | {% if next_url %}<a href='{{ next_url|safe }}'>next</a>{% else %}next{% endif %}</span>
+  <br><br>
+  <table class='info_display'>
+    <tbody>
+        <tr><td>Run title</td><td>{{ icat_info.title|default:"unknown" }}</td></tr>
+        <tr><td>Run start</td><td>{{ icat_info.startTime|default:"unknown" }}</td></tr>
+        <tr><td>Run end</td><td>{{ icat_info.endTime|default:"unknown" }}</td></tr>
+        <tr><td>Duration</td><td>{{ icat_info.duration|default:"0" }}</td></tr>
+        <tr><td>Total counts</td><td>{{ icat_info.totalCounts|default:"0" }}</td></tr>
+        <tr><td>Proton charge</td><td>{{ icat_info.protonCharge|default:"0" }}</td></tr>
+    </tbody>
+  </table>
+  <p>
+  {% if image_url %}
+  <p>
+    <img style="max-width:90%" src="{{ image_url|safe }}" alt="Reduced data">
+  <p>
+  {% endif %}
+  Data files: 
+  <ul>
+  {%if icat_info.data_files %}
+    {% for item in icat_info.data_files %}<li>{{ item|default:"unknown" }}</li>
+    {% endfor %}
+  {% else %}
+    {{ run_object.file|default:"unknown" }}
+  {% endif %}
+  </ul>
+  Reduced files: 
+  <ul>
+  {%if icat_info.reduced_files %}
+    {% for item in icat_info.reduced_files %}<li>{{ item|default:"unknown" }}</li>
+    {% endfor %}
+  {% endif %}
+  </ul>
+{% endblock %}
+
+{% block content %}
+  <table class="message_table fixed_table">
+    <thead>
+      <tr>
+        <th style="width: 170px;">Message</th>
+        <th>Information</th>
+        <th style="width: 90px;">Time</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in status %}
+      <tr>
+        <td>{{ item.queue_id.name|lower }}</td>
+        {% if item.last_error %}<td class="error">{{ item.last_error.description }}</td>{% else %}<td>{{ item.last_info.description }}</td>{% endif %}
+        <td>{{ item.created_on }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <br>
+  {% if is_instrument_staff %}
+  Submit for post-processing: <a href='javascript:void(0);' onClick="confirm('catalog');">catalog</a>
+  {% if reduce_url %} | <a href='javascript:void(0);' onClick="confirm('reduce');">reduction</a> | <a href='javascript:void(0);' onClick="confirm('postprocess');">all post-processing</a>{% endif %} 
+  {% if reduction_setup_url %} | <a href='{{ reduction_setup_url }}'>setup</a>{% endif %} 
+  {% endif %}
+{% endblock %}
